@@ -5,7 +5,7 @@ void setup() {
   size(640,360);
   // We make a new Pendulum object with an origin location and arm length.
   shoulder = new ArmSegment(new PVector(width/2,height/2),100,1);
-  forearm =  new ArmSegment(new PVector(width/2,height/2),75,3);
+  forearm =  new ArmSegment(new PVector(-width/4,-height/4),75,3);
   shoulder.setAngle(-45);
   forearm.setAngle(-65);
   shoulderEndpoint = new PVector(0,0);
@@ -29,17 +29,15 @@ void draw() {
   }
   if (forearm.isStable()) {
     if (forearm.nearAngle(-65)) {
-      println("forearm going to 65");
-      forearm.gotoAngle(65, 50);
+      forearm.gotoAngle(65, 75);
     } else {
-      println("forearm going to -65");
       forearm.gotoAngle(-65, 75);
     }
   }
-  shoulderEndpoint = shoulder.getEndpoint();
-  forearm.setOrigin(shoulderEndpoint);
+  //  shoulderEndpoint = shoulder.getEndpoint();
+  //forearm.setOrigin(shoulderEndpoint);
   forearm.render();
-  delay(100);
+  delay(25);
 }
  
 class ArmSegment  {
@@ -50,7 +48,7 @@ class ArmSegment  {
   float angle_r;       // Arm segment angle (radians)
   float velocity;      // Angular velocity
   float acceleration;  // Angular acceleration
-  float dampener;
+  float dampener, dampenerUpticking, dampenerUptickAmount;
   boolean reachedTargetAngle;
   float targetAngle;
   float accelerationDenom = 75;
@@ -66,6 +64,8 @@ class ArmSegment  {
     velocity = 0.0;
     acceleration = 0.0;
     dampener = 0.85;
+    dampenerUpticking = .01;
+    dampenerUptickAmount = 0.3; // four frames will increase dampener to full strength
     reachedTargetAngle = false;
   }
  
@@ -85,6 +85,7 @@ class ArmSegment  {
   void gotoAngle(float _angle, float _accelDenom) {
     targetAngle = _angle;
     accelerationDenom = _accelDenom;
+    dampenerUpticking = .015;
     reachedTargetAngle = false;
   }
   
@@ -112,10 +113,13 @@ class ArmSegment  {
     }
 
     velocity += acceleration;
-    velocity *= dampener;
+    velocity *= dampenerUpticking;
     angle += velocity;
     angle_r = radians(angle);
     segmentEndpoint.set(segmentLength * cos(angle_r), segmentLength * sin(angle_r));
+    dampenerUpticking = (dampenerUpticking + dampenerUptickAmount > dampener ? 
+                         dampener :
+                         dampenerUpticking + dampenerUptickAmount);
 
   }
  
