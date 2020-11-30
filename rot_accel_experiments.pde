@@ -4,11 +4,12 @@ PVector shoulderEndpoint;
 void setup() {
   size(640,360);
   // We make a new Pendulum object with an origin location and arm length.
-  shoulder = new ArmSegment(new PVector(width/2,height/2),100,1);
-  forearm =  new ArmSegment(new PVector(-width/4,-height/4),75,3);
+  shoulder = new ArmSegment("shoulder", new PVector(width/2,height/2),  75,  1);
+  forearm =  new ArmSegment("forearm", new PVector(-width/4,-height/4), 100, 3);
   shoulder.setAngle(-45);
-  forearm.setAngle(-65);
+  forearm.setAngle(-45);
   shoulderEndpoint = new PVector(0,0);
+  textSize(24);
 }
  
 void draw() {
@@ -16,31 +17,46 @@ void draw() {
   shoulder.update();
   if (shoulder.isStable()) {
     if (shoulder.nearAngle(45)) {
-      shoulder.gotoAngle(-45, 50);
+      shoulder.gotoAngle(-45, 90);
     } else {
-      shoulder.gotoAngle(45, 75);
+      shoulder.gotoAngle(45, 90);
+      forearm.gotoAngle(-45,20);
     }
   }
   shoulder.render();
 
-  forearm.update();
-  if (forearm.getAngle() < -60) {
-    println("forearm angle:", forearm.getAngle());
-  }
-  if (forearm.isStable()) {
-    if (forearm.nearAngle(-65)) {
-      forearm.gotoAngle(65, 75);
-    } else {
-      forearm.gotoAngle(-65, 75);
+  float shoulderAngle = shoulder.getAngle();
+  if (shoulder.inUpStroke()) {
+    if ((shoulderAngle < -10) && forearm.isStable()) { 
+      println("Going to -55, upstroke");
+      forearm.gotoAngle(-55,50); // swing farther up
+    } else if ((shoulderAngle > 10) && forearm.isStable()) {
+      println("Going to neutral, upstroke");
+      forearm.gotoAngle(30,25); // neutral
+    }
+  } else {
+    if ((shoulderAngle < -40) && forearm.isStable()) {
+      println("Going to neutral, downstroke");
+      forearm.gotoAngle(30,50); // neutral, downstroke
+    } else if ((shoulderAngle > 25) && forearm.isStable()) {
+      println("Going to 85, downstroke");
+      forearm.gotoAngle(85,25); // swing farther down
     }
   }
-  //  shoulderEndpoint = shoulder.getEndpoint();
-  //forearm.setOrigin(shoulderEndpoint);
+
+  forearm.update();
+  shoulderEndpoint = shoulder.getEndpoint();
+  forearm.setOrigin(shoulderEndpoint);
   forearm.render();
-  delay(25);
+
+  fill(255);
+  text("<:" + round(shoulderAngle) + " US:" + shoulder.inUpStroke(), 10, 10);
+
+  delay(200);
 }
  
 class ArmSegment  {
+  String segmentName;
   PVector origin;          // Location of arm origin
   PVector segmentEndpoint; // Location of arm segment end
   float segmentLength;     // Length of arm segment
@@ -54,9 +70,9 @@ class ArmSegment  {
   float accelerationDenom = 75;
   float stabilityTolerance;
   
-  ArmSegment(PVector _origin, float _segmentLength, float tolerance) {
+  ArmSegment(String _segmentName, PVector _origin, float _segmentLength, float tolerance) {
+    segmentName = _segmentName;
     origin = _origin.get();
-    angle = PI/2;
     segmentEndpoint = new PVector();
     segmentLength = _segmentLength;
     stabilityTolerance = tolerance;
@@ -93,6 +109,14 @@ class ArmSegment  {
     return reachedTargetAngle;
   }
 
+  boolean inUpStroke() {
+    return velocity < 0;
+  }
+
+  boolean inDownStroke() {
+    return velocity > 0;
+  }
+
   void setOrigin(PVector _origin) {
     origin.set(_origin.x, _origin.y);
   }
@@ -110,6 +134,7 @@ class ArmSegment  {
     } else {
       acceleration = 0;
       reachedTargetAngle = true;
+      println(segmentName + ": Reached target angle (" + targetAngle + ")");
     }
 
     velocity += acceleration;
