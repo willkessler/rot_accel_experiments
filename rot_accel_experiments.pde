@@ -1,17 +1,63 @@
+// Actuator style control of arm segments
+// Author: Will Kessler 12/1/2020
+
 ArmSegment shoulder, forearm;
 PVector shoulderEndpoint;
+StringList statuses;
+
  
+// https://forum.processing.org/two/discussion/3811/what-is-the-alternative-in-processing
+int sign(float f) {
+  if (f==0) return(0);
+  return(int(f/abs(f)));
+}
+
+// see: https://www.euclideanspace.com/maths/algebra/vectors/angleBetween/
+FloatDict angleBetweenVectors(PVector v1, PVector v2) {        
+  FloatDict result = new FloatDict();
+  result.set("angle", 0);
+  result.set("sign", 1);
+  result.set("signedAngle", 0);
+  PVector v1Norm = new PVector(v1.x, v1.y);
+  PVector v2Norm = new PVector(v2.x, v2.y);
+  v1Norm.normalize();
+  v2Norm.normalize();
+  
+  PVector zeroCheck = PVector.sub(v1Norm, v2Norm);
+  if (zeroCheck.mag() < 0.01) {
+    return result;
+  }
+  float dp = v1Norm.dot(v2Norm);
+  result.set("angle", degrees(acos(dp)));
+  // cross prod of 2 2d vecs, cf source of https://chipmunk-physics.net/
+  // also see https://stackoverflow.com/questions/243945/calculating-a-2d-vectors-cross-product#:~:text=You%20can't%20do%20a,vectors%20on%20the%20xy%2Dplane.
+  result.set("sign", sign(v1.x * v2.y - v1.y * v2.x));
+  result.set("signedAngle", result.get("angle") * result.get("sign"));
+  return result;
+}
+
 void setup() {
   size(640,360);
   // We make a new Pendulum object with an origin location and arm length.
-  shoulder = new ArmSegment("shoulder", new PVector(width/2,height/2),  75,  1);
-  forearm =  new ArmSegment("forearm", new PVector(-width/4,-height/4), 100, 3);
+  shoulder = new ArmSegment("shoulder", null, new PVector(width/2,height/2),  75,  1);
+  forearm =  new ArmSegment("forearm",  shoulder, new PVector(-width/4,-height/4), 100, 3);
   shoulder.setAngle(-45);
   forearm.setAngle(-45);
   shoulderEndpoint = new PVector(0,0);
-  textSize(24);
+  textSize(14);
+  statuses = new StringList();
 }
  
+void renderStatuses() {
+  String [] statusArray = statuses.array();
+  int i;
+  for (i = 0; i < statuses.size(); ++i) {
+    text(statusArray[i], 10, 10 + i * 15);
+  }
+  statuses.clear();
+}
+
+
 void draw() {
   background(0);
   shoulder.update();
@@ -23,55 +69,60 @@ void draw() {
       forearm.gotoAngle(-45,20);
     }
   }
-  shoulder.render();
 
   float shoulderAngle = shoulder.getAngle();
+  statuses.append("<:" + round(shoulderAngle) + " US:" + shoulder.inUpStroke());
+
   if (shoulder.inUpStroke()) {
     if ((shoulderAngle < -10) && forearm.isStable()) { 
-      println("Going to -55, upstroke");
-      forearm.gotoAngle(-55,50); // swing farther up
+      statuses.append("Going to -40, upstroke");
+      forearm.gotoAngle(-40,50); // swing farther up
     } else if ((shoulderAngle > 10) && forearm.isStable()) {
-      println("Going to neutral, upstroke");
+      statuses.append("Going to neutral, upstroke");
       forearm.gotoAngle(30,25); // neutral
     }
   } else {
-    if ((shoulderAngle < -40) && forearm.isStable()) {
-      println("Going to neutral, downstroke");
-      forearm.gotoAngle(30,50); // neutral, downstroke
-    } else if ((shoulderAngle > 25) && forearm.isStable()) {
-      println("Going to 85, downstroke");
-      forearm.gotoAngle(85,25); // swing farther down
+    if ((shoulderAngle < -30) && forearm.isStable()) {
+      statuses.append("Going to neutral, downstroke");
+      //println("going to neutral downstroke");
+      forearm.gotoAngle(30,40); // neutral, downstroke
+    } else if ((shoulderAngle > 15) && forearm.isStable()) {
+      statuses.append("Going to 60, downstroke");
+      forearm.gotoAngle(60,30); // swing farther down
     }
   }
 
   forearm.update();
   shoulderEndpoint = shoulder.getEndpoint();
   forearm.setOrigin(shoulderEndpoint);
-  forearm.render();
 
   fill(255);
-  text("<:" + round(shoulderAngle) + " US:" + shoulder.inUpStroke(), 10, 10);
+  renderStatuses();
 
-  delay(200);
+  shoulder.render();
+  forearm.render();
+  //delay(20);
 }
  
 class ArmSegment  {
-  String segmentName;
+  String segmentName;      // Name (convenience) of arm segment for debugging
+  ArmSegment parent;       // null if root, otherwise, parent of this arm segment
   PVector origin;          // Location of arm origin
   PVector segmentEndpoint; // Location of arm segment end
   float segmentLength;     // Length of arm segment
-  float angle;             // Arm segment angle (degrees)
-  float angle_r;       // Arm segment angle (radians)
-  float velocity;      // Angular velocity
-  float acceleration;  // Angular acceleration
+  float angle;             // Arm segment angle (degrees) from parent or horizon (if root)
+  float angle_r;           // Arm segment angle (radians)
+  float velocity;          // Angular velocity
+  float acceleration;      // Angular acceleration
   float dampener, dampenerUpticking, dampenerUptickAmount;
   boolean reachedTargetAngle;
   float targetAngle;
   float accelerationDenom = 75;
   float stabilityTolerance;
   
-  ArmSegment(String _segmentName, PVector _origin, float _segmentLength, float tolerance) {
+  ArmSegment(String _segmentName, ArmSegment _parent, PVector _origin, float _segmentLength, float tolerance) {
     segmentName = _segmentName;
+    parent = _parent;
     origin = _origin.get();
     segmentEndpoint = new PVector();
     segmentLength = _segmentLength;
@@ -134,14 +185,20 @@ class ArmSegment  {
     } else {
       acceleration = 0;
       reachedTargetAngle = true;
-      println(segmentName + ": Reached target angle (" + targetAngle + ")");
+      statuses.append(segmentName + ": Reached target angle (" + targetAngle + ")");
     }
 
     velocity += acceleration;
     velocity *= dampenerUpticking;
     angle += velocity;
     angle_r = radians(angle);
-    segmentEndpoint.set(segmentLength * cos(angle_r), segmentLength * sin(angle_r));
+    // additionally rotate by the sum of the angles of the parent and grandparent
+    float totalRot = angle_r;
+    if (parent != null) {
+      totalRot += radians(parent.getAngle());
+    }
+    segmentEndpoint.set(segmentLength * cos(totalRot), segmentLength * sin(totalRot));
+
     dampenerUpticking = (dampenerUpticking + dampenerUptickAmount > dampener ? 
                          dampener :
                          dampenerUpticking + dampenerUptickAmount);
