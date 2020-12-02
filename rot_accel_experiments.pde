@@ -1,6 +1,9 @@
 // Actuator style control of arm segments
 // Author: Will Kessler 12/1/2020
 
+// todo: allow for "coast" at end where dampener weakens
+// allow for callback after we pass the targetPoint, so we can immediately "coast" to next target
+
 ArmSegment shoulder, forearm;
 PVector shoulderEndpoint;
 StringList statuses;
@@ -66,7 +69,6 @@ void draw() {
       shoulder.gotoAngle(-45, 90);
     } else {
       shoulder.gotoAngle(45, 90);
-      forearm.gotoAngle(-45,20);
     }
   }
 
@@ -101,7 +103,7 @@ void draw() {
 
   shoulder.render();
   forearm.render();
-  //delay(20);
+  delay(200);
 }
  
 class ArmSegment  {
@@ -183,7 +185,7 @@ class ArmSegment  {
     if (abs(angleDiff) > stabilityTolerance) {
       acceleration = angleDiff / accelerationDenom;
     } else {
-      acceleration = 0;
+      //acceleration = 0;
       reachedTargetAngle = true;
       statuses.append(segmentName + ": Reached target angle (" + targetAngle + ")");
     }
