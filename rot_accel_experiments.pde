@@ -132,7 +132,7 @@ class ArmSegment  {
  
     velocity = 0.0;
     acceleration = 0.0;
-    dampener = 0.85;
+    dampener = .9;
     dampenerUpticking = .01;
     dampenerUptickAmount = 0.3; // four frames will increase dampener to full strength
     reachedTargetAngle = false;
